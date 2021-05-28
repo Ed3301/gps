@@ -1,38 +1,22 @@
 <template>
   <div id="app">
-<!--    <GmapMap-->
-<!--            id="map"-->
-<!--            :center="initialPosition"-->
-<!--            :zoom="9"-->
-<!--            map-type-id="roadmap"-->
-<!--    >-->
-<!--      <GmapMarker-->
-<!--              :position="{lat: 40.2212737, lng: 44.6657528}"-->
-<!--              :clickable="true"-->
-<!--      />-->
-
-<!--      <DirectionsRender-->
-<!--                :travelMode="'DRIVING'"-->
-<!--                :origin="{query: '40.2212737, 44.6657528'}"-->
-<!--                :destination="{query: '40.1706605, 44.5105709'}"-->
-<!--      />-->
-<!--    </GmapMap>-->
-<!--      <div id="panel"></div>-->
-        <div id="map"></div>
+      <input
+              id="start-input"
+              class="controls"
+              type="text"
+              placeholder="Sart position"
+      />
+      <input
+              id="end-input"
+              class="controls"
+              type="text"
+              placeholder="End position"
+      />
+      <div id="map"></div>
   </div>
 </template>
 
 <script>
-import Vue from 'vue';
-// import * as VueGoogleMaps from 'vue2-google-maps';
-// import DirectionsRender from "./components/directionsRender";
-
-// Vue.use(VueGoogleMaps, {
-//   load: {
-//     key: 'AIzaSyCwpN-RMCyjzcvMzyzSZzQBz2iyr1I7rRU',
-//     libraries: 'places',
-//   },
-// });
 
 export default {
   name: 'App',
@@ -56,24 +40,21 @@ export default {
   },
   methods: {
     async setCurrentUserLocation() {
-
         if(navigator.geolocation) {
-        await navigator.geolocation.getCurrentPosition(position => {
-            this.initialPosition = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-            };
-            console.log(1);
+            await navigator.geolocation.getCurrentPosition(position => {
+                this.initialPosition = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                };
 
-            this.origin.query = `${position.coords.latitude}, ${position.coords.longitude}`;
-            this.initMap();
-        })
+                this.origin.query = `${position.coords.latitude}, ${position.coords.longitude}`;
+                this.initMap();
+            })
       }
     },
       initMap() {
           const directionsService = new google.maps.DirectionsService();
           const directionsRenderer = new google.maps.DirectionsRenderer({draggable: true});
-          console.log(2);
 
           const map = new google.maps.Map(document.getElementById("map"), {
               zoom: 9,
@@ -92,7 +73,86 @@ export default {
           });
 
           directionsRenderer.setMap(map);
-          // this.calculateAndDisplayRoute(directionsService, directionsRenderer);
+
+          const start = document.getElementById("start-input");
+          const end = document.getElementById("end-input");
+          const startSearchBox = new google.maps.places.SearchBox(start);
+          const endSearchBox = new google.maps.places.SearchBox(end);
+          map.controls[google.maps.ControlPosition.TOP_LEFT].push(start);
+          map.controls[google.maps.ControlPosition.TOP_RIGHT].push(end);
+          // Bias the SearchBox results towards current map's viewport.
+          map.addListener("bounds_changed", () => {
+              startSearchBox.setBounds(map.getBounds());
+              endSearchBox.setBounds(map.getBounds());
+          });
+
+          startSearchBox.addListener("places_changed", () => {
+              const places = startSearchBox.getPlaces();
+              this.origin.query = `${places[0].geometry.location.lat()}, ${places[0].geometry.location.lng()}`;
+              this.calculateAndDisplayRoute(directionsService, directionsRenderer);
+
+              if (places.length == 0) {
+                  return;
+              }
+
+              // For each place, get the icon, name and location.
+              const bounds = new google.maps.LatLngBounds();
+              places.forEach((place) => {
+                  if (!place.geometry || !place.geometry.location) {
+                      console.log("Returned place contains no geometry");
+                      return;
+                  }
+                  const icon = {
+                      url: place.icon,
+                      size: new google.maps.Size(71, 71),
+                      origin: new google.maps.Point(0, 0),
+                      anchor: new google.maps.Point(17, 34),
+                      scaledSize: new google.maps.Size(25, 25),
+                  };
+
+                  if (place.geometry.viewport) {
+                      // Only geocodes have viewport.
+                      bounds.union(place.geometry.viewport);
+                  } else {
+                      bounds.extend(place.geometry.location);
+                  }
+              });
+              map.fitBounds(bounds);
+          });
+          endSearchBox.addListener("places_changed", () => {
+              const places = endSearchBox.getPlaces();
+
+              this.destination.query = `${places[0].geometry.location.lat()}, ${places[0].geometry.location.lng()}`;
+              this.calculateAndDisplayRoute(directionsService, directionsRenderer);
+
+              if (places.length == 0) {
+                  return;
+              }
+
+              // For each place, get the icon, name and location.
+              const bounds = new google.maps.LatLngBounds();
+              places.forEach((place) => {
+                  if (!place.geometry || !place.geometry.location) {
+                      console.log("Returned place contains no geometry");
+                      return;
+                  }
+                  const icon = {
+                      url: place.icon,
+                      size: new google.maps.Size(71, 71),
+                      origin: new google.maps.Point(0, 0),
+                      anchor: new google.maps.Point(17, 34),
+                      scaledSize: new google.maps.Size(25, 25),
+                  };
+
+                  if (place.geometry.viewport) {
+                      // Only geocodes have viewport.
+                      bounds.union(place.geometry.viewport);
+                  } else {
+                      bounds.extend(place.geometry.location);
+                  }
+              });
+              map.fitBounds(bounds);
+          });
       },
       calculateAndDisplayRoute(directionsService, directionsRenderer) {
           directionsService.route(
@@ -109,7 +169,7 @@ export default {
                   }
               }
           );
-      }
+      },
   }
 }
 </script>
